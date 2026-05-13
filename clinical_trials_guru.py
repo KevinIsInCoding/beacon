@@ -41,10 +41,13 @@ SUBMIT_PROFILE_TOOL: anthropic.types.ToolParam = {
                 "type": "integer",
                 "description": "Months since first symptom onset",
             },
+<<<<<<< HEAD
             "diagnosis_months": {
                 "type": "integer",
                 "description": "Months since formal/official diagnosis",
             },
+=======
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
             "benchmarks": {
                 "type": "object",
                 "description": "Disease-specific scores, e.g. {\"ALSFRS-R\": \"38\"}",
@@ -62,6 +65,7 @@ SUBMIT_PROFILE_TOOL: anthropic.types.ToolParam = {
             "phases": {
                 "type": "array",
                 "items": {"type": "string", "enum": ["0", "1", "2", "3", "4"]},
+<<<<<<< HEAD
                 "description": "Desired trial phases (0=Early Phase 1, 1=Phase 1, 2=Phase 2, 3=Phase 3, 4=Phase 4). Empty = all phases.",
             },
             "include_eap": {
@@ -70,17 +74,30 @@ SUBMIT_PROFILE_TOOL: anthropic.types.ToolParam = {
             },
         },
         "required": ["disease", "age", "onset_months", "diagnosis_months", "zip_code"],
+=======
+                "description": "Desired trial phases. Empty = all phases.",
+            },
+        },
+        "required": ["disease", "age", "onset_months", "zip_code"],
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
     },
 }
 
 SEARCH_TRIALS_TOOL: anthropic.types.ToolParam = {
     "name": "search_clinical_trials",
     "description": (
+<<<<<<< HEAD
         "Search ClinicalTrials.gov for studies within a geographic radius. "
         "Results are pre-ranked by distance from the patient's location. "
         "Call multiple times with different parameters (synonyms, broader radius, "
         "different phases) if initial results are sparse. "
         "Use study_type='EXPANDED_ACCESS' to search for Expanded Access Programs (EAP / compassionate use)."
+=======
+        "Search ClinicalTrials.gov for recruiting trials within a geographic radius. "
+        "Results are pre-ranked by distance from the patient's location. "
+        "Call multiple times with different parameters (synonyms, broader radius, "
+        "different phases) if initial results are sparse."
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
     ),
     "input_schema": {
         "type": "object",
@@ -95,12 +112,16 @@ SEARCH_TRIALS_TOOL: anthropic.types.ToolParam = {
             "phases": {
                 "type": "array",
                 "items": {"type": "string"},
+<<<<<<< HEAD
                 "description": "Phase numbers to filter ['1','2','3']. Empty = all. Ignored for EAP.",
             },
             "study_type": {
                 "type": "string",
                 "enum": ["INTERVENTIONAL", "EXPANDED_ACCESS"],
                 "description": "INTERVENTIONAL (default) for clinical trials; EXPANDED_ACCESS for EAP/compassionate use.",
+=======
+                "description": "Phase numbers to filter ['1','2','3']. Empty = all.",
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
             },
             "max_results": {"type": "integer", "description": "Max trials to return (default 20)"},
         },
@@ -118,11 +139,15 @@ REQUIRED:
   • Disease/condition (standardize: "Lou Gehrig's" → "Amyotrophic Lateral Sclerosis")
   • Patient age
   • Months since first symptom onset (convert dates/years as needed)
+<<<<<<< HEAD
   • Months since formal/official diagnosis (convert dates/years as needed; may differ from onset)
+=======
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
   • ZIP/postal code and country for geographic search
 
 OPTIONAL (ask based on disease):
   • Disease-specific benchmark scores:
+<<<<<<< HEAD
       ALS → ALSFRS-R (0-48) + FVC % predicted (0-100%) + ALS subtype;
               FVC (Forced Vital Capacity) measures how much air a person can forcibly exhale —
               it reflects respiratory muscle strength. In ALS it is expressed as a percentage
@@ -160,6 +185,15 @@ OPTIONAL (ask based on disease):
       - Or both; or all phases (default if no preference)
 
 Ask naturally. You may infer disease synonyms and convert dates to months, but never infer or skip the ZIP/postal code — always ask the patient for it directly. Once you have every required field confirmed by the patient, call submit_profile.\
+=======
+      ALS → ALSFRS-R (0-48); MS → EDSS (0-10); Parkinson's → MDS-UPDRS III;
+      Huntington's → TFC (0-13) + CAG repeats; SMA → HFMS + SMA type;
+      Duchenne/Pompe → 6-Minute Walk Test; Friedreich's → SARA score
+  • Preferred search radius in miles (default 100)
+  • Trial phases of interest (1 / 2 / 3 / 4 / early)
+
+Ask naturally. Infer what you can. Once you have the required fields, call submit_profile.\
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
 """
 
 RESEARCH_SYSTEM = """\
@@ -169,6 +203,7 @@ Results are already ranked by geographic distance from the patient.
 
 Workflow:
 1. Search for the patient's disease. Use both the full medical name and common abbreviation.
+<<<<<<< HEAD
    - If the patient wants clinical trials, search with study_type="INTERVENTIONAL".
    - If the patient wants Expanded Access Programs (EAP), also search with study_type="EXPANDED_ACCESS".
    - If the patient wants both, run separate searches for each study_type.
@@ -188,10 +223,25 @@ Workflow:
    **Qualification criteria:** [Key inclusion AND exclusion criteria relevant to this patient,
                                including age range, functional score thresholds, FVC cutoffs,
                                and any red flags. Be specific — use exact numbers from the data.]
+=======
+2. If fewer than 3 results are found, retry with: a wider radius, a disease synonym,
+   or fewer phase filters.
+3. Produce a final report listing the top 5 trials ranked by site proximity.
+   For EACH trial use exactly this format (repeat the block per trial):
+
+   📍 **[Closest hospital name]** — [City, State] ([X] mi)
+   **Trial:** [Full trial title] ([Phase])
+   **Sponsor:** [Lead sponsor]
+   **Summary:** [2–3 sentence plain-language description of what the trial is testing
+               and why it may matter for this patient]
+   **Eligibility notes:** [Key inclusion/exclusion criteria relevant to this patient,
+                         including any red flags]
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
    **Link:** https://clinicaltrials.gov/study/[NCT_ID]
 
    ---
 
+<<<<<<< HEAD
 4. After the results add a short "Next steps" section (bullet points).
    For EAP results, note that patients typically need a physician to submit the EAP request.
 
@@ -199,6 +249,9 @@ IMPORTANT: Only report trials returned by the search_clinical_trials tool. Do NO
 list, or recommend any hospitals, centers, or trials that were not in the tool results —
 even well-known institutions. If no results are found, say so clearly and suggest the patient
 ask their neurologist or contact the ALS Association for a referral.
+=======
+4. After the trial list add a short "Next steps" section (bullet points).
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
 
 Be accurate. Do not fabricate details. If data is missing, say so.\
 """
@@ -210,7 +263,10 @@ class PatientProfile:
     disease: str
     age: int
     onset_months: int
+<<<<<<< HEAD
     diagnosis_months: int = 0
+=======
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
     benchmarks: dict[str, str] = field(default_factory=dict)
     zip_code: str = ""
     country_code: str = "US"
@@ -218,14 +274,20 @@ class PatientProfile:
     lon: float = 0.0
     radius_miles: int = 100
     phases: list[str] = field(default_factory=list)
+<<<<<<< HEAD
     include_eap: bool = False
+=======
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
 
     def summary(self) -> str:
         lines = [
             f"Disease: {self.disease}",
             f"Age: {self.age}",
             f"Symptom onset: {self.onset_months} months ago",
+<<<<<<< HEAD
             f"Formal diagnosis: {self.diagnosis_months} months ago",
+=======
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
         ]
         if self.benchmarks:
             lines.append("Benchmarks: " + ", ".join(f"{k}={v}" for k, v in self.benchmarks.items()))
@@ -237,10 +299,13 @@ class PatientProfile:
         if self.phases:
             labels = ["Early Phase 1" if p == "0" else f"Phase {p}" for p in self.phases]
             lines.append(f"Phases: {', '.join(labels)}")
+<<<<<<< HEAD
         interests = ["Clinical trials"]
         if self.include_eap:
             interests.append("Expanded Access Programs (EAP)")
         lines.append(f"Study type interest: {', '.join(interests)}")
+=======
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
         return "\n".join(lines)
 
 
@@ -278,6 +343,7 @@ def search_trials_api(
     lon: float,
     radius_miles: int = 100,
     phases: list[str] | None = None,
+<<<<<<< HEAD
     study_type: str = "INTERVENTIONAL",
     max_results: int = 20,
 ) -> list[dict]:
@@ -285,10 +351,18 @@ def search_trials_api(
     params: dict[str, str | int] = {
         "query.cond": condition,
         "filter.overallStatus": "AVAILABLE" if is_eap else "RECRUITING",
+=======
+    max_results: int = 20,
+) -> list[dict]:
+    params: dict[str, str | int] = {
+        "query.cond": condition,
+        "filter.overallStatus": "RECRUITING",
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
         "filter.geo": f"distance({lat},{lon},{radius_miles}mi)",
         "pageSize": max_results,
         "format": "json",
     }
+<<<<<<< HEAD
     # aggFilters accepts only one value; studyType and phase can't be combined.
     # RECRUITING status already excludes EAPs, so studyType:int is only needed
     # when no phase filter is applied.
@@ -298,6 +372,10 @@ def search_trials_api(
         params["aggFilters"] = "phase:" + " ".join(phases)
     else:
         params["aggFilters"] = "studyType:int"
+=======
+    if phases:
+        params["aggFilters"] = "phase:" + " ".join(phases)
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
     for attempt in range(3):
         try:
             resp = httpx.get(CTGOV_BASE, params=params, timeout=30)
@@ -322,6 +400,7 @@ def _flatten_and_rank(studies: list[dict], patient_lat: float, patient_lon: floa
         sponsor_mod = proto.get("sponsorCollaboratorsModule", {})
         design_mod = proto.get("designModule", {})
 
+<<<<<<< HEAD
         # Central (overall) contacts
         central_contacts = contacts_mod.get("centralContacts", [])
         central_phone = next((c.get("phone", "") for c in central_contacts if c.get("phone")), "")
@@ -335,10 +414,14 @@ def _flatten_and_rank(studies: list[dict], patient_lat: float, patient_lon: floa
         )
 
         sites_with_dist: list[tuple[float, dict]] = []
+=======
+        sites_with_dist: list[tuple[float, str]] = []
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
         for loc in contacts_mod.get("locations", []):
             geo = loc.get("geoPoint", {})
             if geo.get("lat") and geo.get("lon"):
                 d = haversine_miles(patient_lat, patient_lon, geo["lat"], geo["lon"])
+<<<<<<< HEAD
                 loc_contacts = loc.get("contacts", [])
                 loc_phone = next((c.get("phone", "") for c in loc_contacts if c.get("phone")), "")
                 loc_email = next((c.get("email", "") for c in loc_contacts if c.get("email")), "")
@@ -356,6 +439,15 @@ def _flatten_and_rank(studies: list[dict], patient_lat: float, patient_lon: floa
                     "phone": loc_phone or central_phone,
                     "email": loc_email or central_email,
                 }))
+=======
+                label = (
+                    f"{loc.get('facility', '').strip()} — "
+                    f"{loc.get('city', '')}, "
+                    f"{loc.get('state', loc.get('country', ''))} "
+                    f"({d:.0f} mi)"
+                )
+                sites_with_dist.append((d, label))
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
         sites_with_dist.sort(key=lambda x: x[0])
 
         closest_dist = sites_with_dist[0][0] if sites_with_dist else None
@@ -364,15 +456,22 @@ def _flatten_and_rank(studies: list[dict], patient_lat: float, patient_lon: floa
             "title": id_mod.get("briefTitle", ""),
             "phase": ", ".join(design_mod.get("phases", [])) or "N/A",
             "sponsor": sponsor_mod.get("leadSponsor", {}).get("name", ""),
+<<<<<<< HEAD
             "principal_investigator": pi,
             "contact_phone": central_phone,
             "contact_email": central_email,
+=======
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
             "summary": desc_mod.get("briefSummary", "")[:500],
             "eligibility": elig_mod.get("eligibilityCriteria", "")[:1000],
             "min_age": elig_mod.get("minimumAge", ""),
             "max_age": elig_mod.get("maximumAge", ""),
             "closest_site_miles": round(closest_dist, 1) if closest_dist is not None else None,
+<<<<<<< HEAD
             "nearest_sites": [info for _, info in sites_with_dist[:5]],
+=======
+            "nearest_sites": [label for _, label in sites_with_dist[:5]],
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
         })
 
     result.sort(key=lambda x: x["closest_site_miles"] if x["closest_site_miles"] is not None else float("inf"))
@@ -425,7 +524,10 @@ def run_intake_agent(client: anthropic.Anthropic) -> PatientProfile:
                 disease=data["disease"],
                 age=data["age"],
                 onset_months=data["onset_months"],
+<<<<<<< HEAD
                 diagnosis_months=data.get("diagnosis_months", 0),
+=======
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
                 benchmarks=data.get("benchmarks") or {},
                 zip_code=data["zip_code"],
                 country_code=data.get("country_code", "US"),
@@ -433,7 +535,10 @@ def run_intake_agent(client: anthropic.Anthropic) -> PatientProfile:
                 lon=lon,
                 radius_miles=data.get("radius_miles", 100),
                 phases=data.get("phases") or [],
+<<<<<<< HEAD
                 include_eap=data.get("include_eap", False),
+=======
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
             )
 
         messages.append({"role": "assistant", "content": response.content})
@@ -478,11 +583,17 @@ def run_research_agent(client: anthropic.Anthropic, profile: PatientProfile) -> 
             args = block.input
             radius = args.get("radius_miles", profile.radius_miles)
             phases = args.get("phases") or None
+<<<<<<< HEAD
             study_type = args.get("study_type", "INTERVENTIONAL")
             status_msg = (
                 f"[cyan]Searching:[/cyan] '[bold]{args['condition']}[/bold]' | "
                 f"radius=[bold]{radius}[/bold] mi | "
                 f"type=[bold]{study_type}[/bold] | "
+=======
+            status_msg = (
+                f"[cyan]Searching:[/cyan] '[bold]{args['condition']}[/bold]' | "
+                f"radius=[bold]{radius}[/bold] mi | "
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
                 f"phases=[bold]{phases or 'all'}[/bold]"
             )
             try:
@@ -493,7 +604,10 @@ def run_research_agent(client: anthropic.Anthropic, profile: PatientProfile) -> 
                         lon=args["lon"],
                         radius_miles=radius,
                         phases=phases,
+<<<<<<< HEAD
                         study_type=study_type,
+=======
+>>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
                         max_results=args.get("max_results", 20),
                     )
                     ranked = _flatten_and_rank(studies, profile.lat, profile.lon)
