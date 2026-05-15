@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Beacon — Rare Disease Clinical Trial Finder
 
 Beacon is a conversational AI assistant that helps patients with rare diseases find relevant recruiting clinical trials near them. It conducts a warm intake interview, geocodes the patient's location, queries [ClinicalTrials.gov](https://clinicaltrials.gov) in real time, and produces a ranked report of the closest matching trials.
@@ -97,3 +98,20 @@ beacon/
 | `rich`           | Terminal UI (panels, markdown, etc.) |
 | `python-dotenv`  | `.env` file loading                  |
 | `httpx`          | HTTP client for ClinicalTrials.gov   |
+=======
+---
+title: Beacon Trial Finder
+emoji: 📚
+colorFrom: gray
+colorTo: yellow
+sdk: gradio
+sdk_version: 6.14.0
+python_version: '3.13'
+app_file: app.py
+pinned: false
+license: mit
+short_description: help patients with rare disease to find clinical trials
+---
+
+Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+>>>>>>> 2a6ee87 (initial commit)
