@@ -1,0 +1,7 @@
+anthropic>=0.50.0
+gradio>=4.0.0
+langgraph>=1.2.0
+httpx
+python-dotenv
+openai>=1.0.0
+rich>=13.0.0
