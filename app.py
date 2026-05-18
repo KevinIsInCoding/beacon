@@ -62,6 +62,7 @@ def _intake_turn(
             lon=lon,
             radius_miles=data.get("radius_miles", 100),
             phases=data.get("phases") or [],
+            include_eap=data.get("include_eap", False),
         )
         return text or "Got it — searching for trials now…", messages, profile
 
@@ -105,6 +106,7 @@ def _run_research(profile: PatientProfile) -> str:
                     lon=args["lon"],
                     radius_miles=args.get("radius_miles", profile.radius_miles),
                     phases=args.get("phases") or None,
+                    study_type=args.get("study_type", "INTERVENTIONAL"),
                     max_results=args.get("max_results", 20),
                 )
                 ranked = _flatten_and_rank(studies, profile.lat, profile.lon)

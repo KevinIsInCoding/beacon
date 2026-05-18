@@ -64,6 +64,10 @@ SUBMIT_PROFILE_TOOL: anthropic.types.ToolParam = {
                 "items": {"type": "string", "enum": ["0", "1", "2", "3", "4"]},
                 "description": "Desired trial phases. Empty = all phases.",
             },
+            "include_eap": {
+                "type": "boolean",
+                "description": "Whether patient is interested in Expanded Access Programs (compassionate use)",
+            },
         },
         "required": ["disease", "age", "onset_months", "diagnosis_months", "zip_code"],
     },
@@ -72,10 +76,11 @@ SUBMIT_PROFILE_TOOL: anthropic.types.ToolParam = {
 SEARCH_TRIALS_TOOL: anthropic.types.ToolParam = {
     "name": "search_clinical_trials",
     "description": (
-        "Search ClinicalTrials.gov for recruiting trials within a geographic radius. "
+        "Search ClinicalTrials.gov for studies within a geographic radius. "
         "Results are pre-ranked by distance from the patient's location. "
         "Call multiple times with different parameters (synonyms, broader radius, "
-        "different phases) if initial results are sparse."
+        "different phases) if initial results are sparse. "
+        "Use study_type='EXPANDED_ACCESS' to search for Expanded Access Programs (EAP / compassionate use)."
     ),
     "input_schema": {
         "type": "object",
@@ -90,7 +95,12 @@ SEARCH_TRIALS_TOOL: anthropic.types.ToolParam = {
             "phases": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Phase numbers to filter ['1','2','3']. Empty = all.",
+                "description": "Phase numbers to filter ['1','2','3']. Empty = all. Ignored for EAP.",
+            },
+            "study_type": {
+                "type": "string",
+                "enum": ["INTERVENTIONAL", "EXPANDED_ACCESS"],
+                "description": "INTERVENTIONAL (default) for clinical trials; EXPANDED_ACCESS for EAP/compassionate use.",
             },
             "max_results": {"type": "integer", "description": "Max trials to return (default 20)"},
         },
@@ -117,7 +127,11 @@ OPTIONAL (ask based on disease):
       Huntington's → TFC (0-13) + CAG repeats; SMA → HFMS + SMA type;
       Duchenne/Pompe → 6-Minute Walk Test; Friedreich's → SARA score
   • Preferred search radius in miles (default 100)
-  • Trial phases of interest (1 / 2 / 3 / 4 / early)
+  • Study types of interest — ask whether the patient wants:
+      - Clinical trials (phases 1 / 2 / 3 / 4 / early phase 1)
+      - Expanded Access Programs (EAP / compassionate use) — for patients who may not
+        qualify for a trial but want access to an investigational treatment
+      - Or both
 
 Ask naturally. Infer what you can. Once you have the required fields, call submit_profile.\
 """
@@ -129,15 +143,19 @@ Results are already ranked by geographic distance from the patient.
 
 Workflow:
 1. Search for the patient's disease. Use both the full medical name and common abbreviation.
+   - If the patient wants clinical trials, search with study_type="INTERVENTIONAL".
+   - If the patient wants Expanded Access Programs (EAP), also search with study_type="EXPANDED_ACCESS".
+   - If the patient wants both, run separate searches for each study_type.
 2. If fewer than 3 results are found, retry with: a wider radius, a disease synonym,
    or fewer phase filters.
-3. Produce a final report listing the top 5 trials ranked by site proximity.
-   For EACH trial use exactly this format (repeat the block per trial):
+3. Produce a final report. Use separate sections for Clinical Trials and Expanded Access if both apply.
+   List the top 5 results per section ranked by site proximity.
+   For EACH entry use exactly this format (repeat the block per entry):
 
    📍 **[Closest hospital name]** — [City, State] ([X] mi)
-   **Trial:** [Full trial title] ([Phase])
+   **Trial:** [Full title] ([Phase] — or "Expanded Access" for EAP)
    **Sponsor:** [Lead sponsor]
-   **Summary:** [2–3 sentence plain-language description of what the trial is testing
+   **Summary:** [2–3 sentence plain-language description of what the trial/program is testing
                and why it may matter for this patient]
    **Eligibility notes:** [Key inclusion/exclusion criteria relevant to this patient,
                          including any red flags]
@@ -145,7 +163,8 @@ Workflow:
 
    ---
 
-4. After the trial list add a short "Next steps" section (bullet points).
+4. After the results add a short "Next steps" section (bullet points).
+   For EAP results, note that patients typically need a physician to submit the EAP request.
 
 Be accurate. Do not fabricate details. If data is missing, say so.\
 """
@@ -165,6 +184,7 @@ class PatientProfile:
     lon: float = 0.0
     radius_miles: int = 100
     phases: list[str] = field(default_factory=list)
+    include_eap: bool = False
 
     def summary(self) -> str:
         lines = [
@@ -183,6 +203,10 @@ class PatientProfile:
         if self.phases:
             labels = ["Early Phase 1" if p == "0" else f"Phase {p}" for p in self.phases]
             lines.append(f"Phases: {', '.join(labels)}")
+        interests = ["Clinical trials"]
+        if self.include_eap:
+            interests.append("Expanded Access Programs (EAP)")
+        lines.append(f"Study type interest: {', '.join(interests)}")
         return "\n".join(lines)
 
 
@@ -220,16 +244,19 @@ def search_trials_api(
     lon: float,
     radius_miles: int = 100,
     phases: list[str] | None = None,
+    study_type: str = "INTERVENTIONAL",
     max_results: int = 20,
 ) -> list[dict]:
+    is_eap = study_type == "EXPANDED_ACCESS"
     params: dict[str, str | int] = {
         "query.cond": condition,
-        "filter.overallStatus": "RECRUITING",
+        "filter.overallStatus": "AVAILABLE" if is_eap else "RECRUITING",
+        "filter.studyType": study_type,
         "filter.geo": f"distance({lat},{lon},{radius_miles}mi)",
         "pageSize": max_results,
         "format": "json",
     }
-    if phases:
+    if phases and not is_eap:
         params["aggFilters"] = "phase:" + " ".join(phases)
     for attempt in range(3):
         try:
@@ -341,6 +368,7 @@ def run_intake_agent(client: anthropic.Anthropic) -> PatientProfile:
                 lon=lon,
                 radius_miles=data.get("radius_miles", 100),
                 phases=data.get("phases") or [],
+                include_eap=data.get("include_eap", False),
             )
 
         messages.append({"role": "assistant", "content": response.content})
@@ -385,9 +413,11 @@ def run_research_agent(client: anthropic.Anthropic, profile: PatientProfile) -> 
             args = block.input
             radius = args.get("radius_miles", profile.radius_miles)
             phases = args.get("phases") or None
+            study_type = args.get("study_type", "INTERVENTIONAL")
             status_msg = (
                 f"[cyan]Searching:[/cyan] '[bold]{args['condition']}[/bold]' | "
                 f"radius=[bold]{radius}[/bold] mi | "
+                f"type=[bold]{study_type}[/bold] | "
                 f"phases=[bold]{phases or 'all'}[/bold]"
             )
             try:
@@ -398,6 +428,7 @@ def run_research_agent(client: anthropic.Anthropic, profile: PatientProfile) -> 
                         lon=args["lon"],
                         radius_miles=radius,
                         phases=phases,
+                        study_type=study_type,
                         max_results=args.get("max_results", 20),
                     )
                     ranked = _flatten_and_rank(studies, profile.lat, profile.lon)
