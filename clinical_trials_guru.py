@@ -41,6 +41,10 @@ SUBMIT_PROFILE_TOOL: anthropic.types.ToolParam = {
                 "type": "integer",
                 "description": "Months since first symptom onset",
             },
+            "diagnosis_months": {
+                "type": "integer",
+                "description": "Months since formal/official diagnosis",
+            },
             "benchmarks": {
                 "type": "object",
                 "description": "Disease-specific scores, e.g. {\"ALSFRS-R\": \"38\"}",
@@ -61,7 +65,7 @@ SUBMIT_PROFILE_TOOL: anthropic.types.ToolParam = {
                 "description": "Desired trial phases. Empty = all phases.",
             },
         },
-        "required": ["disease", "age", "onset_months", "zip_code"],
+        "required": ["disease", "age", "onset_months", "diagnosis_months", "zip_code"],
     },
 }
 
@@ -104,6 +108,7 @@ REQUIRED:
   • Disease/condition (standardize: "Lou Gehrig's" → "Amyotrophic Lateral Sclerosis")
   • Patient age
   • Months since first symptom onset (convert dates/years as needed)
+  • Months since formal/official diagnosis (convert dates/years as needed; may differ from onset)
   • ZIP/postal code and country for geographic search
 
 OPTIONAL (ask based on disease):
@@ -152,6 +157,7 @@ class PatientProfile:
     disease: str
     age: int
     onset_months: int
+    diagnosis_months: int = 0
     benchmarks: dict[str, str] = field(default_factory=dict)
     zip_code: str = ""
     country_code: str = "US"
@@ -165,6 +171,7 @@ class PatientProfile:
             f"Disease: {self.disease}",
             f"Age: {self.age}",
             f"Symptom onset: {self.onset_months} months ago",
+            f"Formal diagnosis: {self.diagnosis_months} months ago",
         ]
         if self.benchmarks:
             lines.append("Benchmarks: " + ", ".join(f"{k}={v}" for k, v in self.benchmarks.items()))
@@ -326,6 +333,7 @@ def run_intake_agent(client: anthropic.Anthropic) -> PatientProfile:
                 disease=data["disease"],
                 age=data["age"],
                 onset_months=data["onset_months"],
+                diagnosis_months=data.get("diagnosis_months", 0),
                 benchmarks=data.get("benchmarks") or {},
                 zip_code=data["zip_code"],
                 country_code=data.get("country_code", "US"),
