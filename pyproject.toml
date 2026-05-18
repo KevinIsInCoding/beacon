@@ -10,8 +10,8 @@ dependencies = [
     "openai>=1.0.0",
     "python-dotenv>=1.2.2",
     "rich>=13.0.0",
-<<<<<<< HEAD
     "gradio>=4.0.0",
 =======
->>>>>>> 6977736 (Initial release: Beacon rare disease clinical trial finder)
+>>>>>>> f8d77e4 (Initial release: Beacon rare disease clinical trial finder)
+>>>>>>> 96a8855 (Initial release: Beacon rare disease clinical trial finder)
 ]
