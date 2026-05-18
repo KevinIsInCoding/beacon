@@ -62,7 +62,7 @@ SUBMIT_PROFILE_TOOL: anthropic.types.ToolParam = {
             "phases": {
                 "type": "array",
                 "items": {"type": "string", "enum": ["0", "1", "2", "3", "4"]},
-                "description": "Desired trial phases. Empty = all phases.",
+                "description": "Desired trial phases (0=Early Phase 1, 1=Phase 1, 2=Phase 2, 3=Phase 3, 4=Phase 4). Empty = all phases.",
             },
             "include_eap": {
                 "type": "boolean",
@@ -128,10 +128,20 @@ OPTIONAL (ask based on disease):
       Duchenne/Pompe → 6-Minute Walk Test; Friedreich's → SARA score
   • Preferred search radius in miles (default 100)
   • Study types of interest — ask whether the patient wants:
-      - Clinical trials (phases 1 / 2 / 3 / 4 / early phase 1)
+      - Clinical trials. Briefly explain the phases so the patient can choose:
+          Early Phase 1 — First-in-human safety testing; tiny doses, very small group (~10–15 people);
+                          no efficacy data yet; highest uncertainty.
+          Phase 1       — Establishes safe dosage range and identifies side effects;
+                          small group (20–80 people); primary goal is safety, not treatment.
+          Phase 2       — Tests whether the treatment works and further evaluates safety;
+                          larger group (100–300 people); patients more likely to receive active drug.
+          Phase 3       — Compares treatment against current standard of care in a large group
+                          (1,000–3,000 people); required for regulatory approval; best efficacy evidence.
+          Phase 4       — Post-approval surveillance; treatment is already FDA-approved;
+                          studies long-term safety, rare side effects, and new uses.
       - Expanded Access Programs (EAP / compassionate use) — for patients who may not
         qualify for a trial but want access to an investigational treatment
-      - Or both
+      - Or both; or all phases (default if no preference)
 
 Ask naturally. Infer what you can. Once you have the required fields, call submit_profile.\
 """
