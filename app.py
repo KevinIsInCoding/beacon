@@ -54,6 +54,7 @@ def _intake_turn(
             disease=data["disease"],
             age=data["age"],
             onset_months=data["onset_months"],
+            diagnosis_months=data.get("diagnosis_months", 0),
             benchmarks=data.get("benchmarks") or {},
             zip_code=data["zip_code"],
             country_code=data.get("country_code", "US"),
