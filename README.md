@@ -18,9 +18,23 @@ Beacon is a conversational AI assistant that helps patients with rare diseases f
 
 ## How it works
 
-1. **Intake agent** (Claude Sonnet) — interviews the patient conversationally to collect disease, age, symptom onset, location, and optional benchmark scores.
-2. **Research agent** (Claude Opus) — searches ClinicalTrials.gov via the official v2 API, retrying with synonyms or wider radii if results are sparse, then outputs a ranked trial report with eligibility notes and next steps.
+1. **Intake agent** (Claude Sonnet) — interviews the patient conversationally to collect disease, age, symptom onset date, formal diagnosis date, location, preferred trial phases, and whether they are interested in Expanded Access Programs (EAP / compassionate use).
+2. **Research agent** (Claude Opus) — searches ClinicalTrials.gov via the official v2 API for clinical trials and/or EAP listings, retrying with synonyms or wider radii if results are sparse, then outputs a ranked report with eligibility notes and next steps.
 3. **LangGraph** orchestrates the two-node pipeline (intake → research).
+
+### Clinical trial phases explained
+
+| Phase | Focus | Typical size |
+|---|---|---|
+| **Early Phase 1** | First-in-human safety; tiny doses | ~10–15 people |
+| **Phase 1** | Safe dosage range and side effects | 20–80 people |
+| **Phase 2** | Does it work? Continued safety | 100–300 people |
+| **Phase 3** | vs. standard of care; required for FDA approval | 1,000–3,000 people |
+| **Phase 4** | Post-approval long-term surveillance | Varies |
+
+### Expanded Access Programs (EAP)
+
+EAP (also called compassionate use) allows patients who do not qualify for or cannot access a clinical trial to receive an investigational drug or device outside of a formal trial. The treatment is not yet FDA-approved; a physician must submit the EAP request to the drug sponsor and obtain FDA authorization. Beacon can search for available EAP listings alongside clinical trials.
 
 ## Project setup
 
@@ -67,6 +81,16 @@ ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```bash
 uv run python app.py
 ```
+
+#### Hot-reload during development
+
+Use the `gradio` CLI to automatically reload the app whenever you save a file — no manual restart needed:
+
+```bash
+uv run gradio app.py
+```
+
+> **Note:** Active user sessions are reset on each reload.
 
 ## Configuration
 
