@@ -139,8 +139,12 @@ OPTIONAL (ask based on disease):
                           (1,000–3,000 people); required for regulatory approval; best efficacy evidence.
           Phase 4       — Post-approval surveillance; treatment is already FDA-approved;
                           studies long-term safety, rare side effects, and new uses.
-      - Expanded Access Programs (EAP / compassionate use) — for patients who may not
-        qualify for a trial but want access to an investigational treatment
+      - Expanded Access Programs (EAP / compassionate use) — a pathway for patients who
+        do not qualify for or cannot access a clinical trial to receive an investigational
+        drug, biologic, or device outside of a trial. Also called "compassionate use."
+        The treatment is not yet FDA-approved; a physician must submit the EAP request
+        to the drug sponsor and obtain FDA authorization. EAP does not guarantee efficacy
+        but may be an option when no approved treatments remain.
       - Or both; or all phases (default if no preference)
 
 Ask naturally. Infer what you can. Once you have the required fields, call submit_profile.\
