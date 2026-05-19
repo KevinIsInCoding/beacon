@@ -11,7 +11,4 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "rich>=13.0.0",
     "gradio>=4.0.0",
-=======
->>>>>>> f8d77e4 (Initial release: Beacon rare disease clinical trial finder)
->>>>>>> 96a8855 (Initial release: Beacon rare disease clinical trial finder)
 ]
