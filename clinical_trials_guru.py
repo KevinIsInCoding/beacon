@@ -123,7 +123,19 @@ REQUIRED:
 
 OPTIONAL (ask based on disease):
   • Disease-specific benchmark scores:
-      ALS → ALSFRS-R (0-48); MS → EDSS (0-10); Parkinson's → MDS-UPDRS III;
+      ALS → ALSFRS-R (0-48) + FVC % predicted (0-100%) + ALS subtype;
+              FVC (Forced Vital Capacity) measures how much air a person can forcibly exhale —
+              it reflects respiratory muscle strength. In ALS it is expressed as a percentage
+              of the value expected for someone of the same age/height/sex (e.g. "72%").
+              Many trials require FVC ≥ 50% or ≥ 60% for enrollment. If the patient has had
+              recent pulmonary function testing, ask for their FVC % predicted.
+              ALS subtype: ask whether the patient has sporadic ALS (no family history, ~90–95%
+              of cases) or familial/genetic ALS (inherited; ~5–10% of cases). If familial, ask
+              which gene mutation is involved if they know it (common ones: SOD1, C9orf72, FUS,
+              TDP-43). This affects trial eligibility — many gene-targeted trials require a
+              confirmed mutation. The patient may skip if unknown. Store as e.g.
+              {"ALS subtype": "sporadic"} or {"ALS subtype": "familial", "ALS gene": "SOD1"}.
+          MS → EDSS (0-10); Parkinson's → MDS-UPDRS III;
       Huntington's → TFC (0-13) + CAG repeats; SMA → HFMS + SMA type;
       Duchenne/Pompe → 6-Minute Walk Test; Friedreich's → SARA score
   • Preferred search radius in miles (default 100)
@@ -147,7 +159,7 @@ OPTIONAL (ask based on disease):
         but may be an option when no approved treatments remain.
       - Or both; or all phases (default if no preference)
 
-Ask naturally. Infer what you can. Once you have the required fields, call submit_profile.\
+Ask naturally. You may infer disease synonyms and convert dates to months, but never infer or skip the ZIP/postal code — always ask the patient for it directly. Once you have every required field confirmed by the patient, call submit_profile.\
 """
 
 RESEARCH_SYSTEM = """\
@@ -166,19 +178,27 @@ Workflow:
    List the top 5 results per section ranked by site proximity.
    For EACH entry use exactly this format (repeat the block per entry):
 
-   📍 **[Closest hospital name]** — [City, State] ([X] mi)
+   📍 **[Closest hospital/facility name]** — [City, State] ([X] mi)
    **Trial:** [Full title] ([Phase] — or "Expanded Access" for EAP)
    **Sponsor:** [Lead sponsor]
+   **Principal Investigator:** [Name — or "Not listed" if absent]
+   **Contact:** [Phone number] | [Email address] (use "Not listed" for any missing field)
    **Summary:** [2–3 sentence plain-language description of what the trial/program is testing
                and why it may matter for this patient]
-   **Eligibility notes:** [Key inclusion/exclusion criteria relevant to this patient,
-                         including any red flags]
+   **Qualification criteria:** [Key inclusion AND exclusion criteria relevant to this patient,
+                               including age range, functional score thresholds, FVC cutoffs,
+                               and any red flags. Be specific — use exact numbers from the data.]
    **Link:** https://clinicaltrials.gov/study/[NCT_ID]
 
    ---
 
 4. After the results add a short "Next steps" section (bullet points).
    For EAP results, note that patients typically need a physician to submit the EAP request.
+
+IMPORTANT: Only report trials returned by the search_clinical_trials tool. Do NOT suggest,
+list, or recommend any hospitals, centers, or trials that were not in the tool results —
+even well-known institutions. If no results are found, say so clearly and suggest the patient
+ask their neurologist or contact the ALS Association for a referral.
 
 Be accurate. Do not fabricate details. If data is missing, say so.\
 """
@@ -265,13 +285,19 @@ def search_trials_api(
     params: dict[str, str | int] = {
         "query.cond": condition,
         "filter.overallStatus": "AVAILABLE" if is_eap else "RECRUITING",
-        "filter.studyType": study_type,
         "filter.geo": f"distance({lat},{lon},{radius_miles}mi)",
         "pageSize": max_results,
         "format": "json",
     }
-    if phases and not is_eap:
+    # aggFilters accepts only one value; studyType and phase can't be combined.
+    # RECRUITING status already excludes EAPs, so studyType:int is only needed
+    # when no phase filter is applied.
+    if is_eap:
+        params["aggFilters"] = "studyType:exp"
+    elif phases:
         params["aggFilters"] = "phase:" + " ".join(phases)
+    else:
+        params["aggFilters"] = "studyType:int"
     for attempt in range(3):
         try:
             resp = httpx.get(CTGOV_BASE, params=params, timeout=30)
@@ -296,18 +322,40 @@ def _flatten_and_rank(studies: list[dict], patient_lat: float, patient_lon: floa
         sponsor_mod = proto.get("sponsorCollaboratorsModule", {})
         design_mod = proto.get("designModule", {})
 
-        sites_with_dist: list[tuple[float, str]] = []
+        # Central (overall) contacts
+        central_contacts = contacts_mod.get("centralContacts", [])
+        central_phone = next((c.get("phone", "") for c in central_contacts if c.get("phone")), "")
+        central_email = next((c.get("email", "") for c in central_contacts if c.get("email")), "")
+
+        # Principal investigator from overallOfficials
+        officials = contacts_mod.get("overallOfficials", [])
+        pi = next(
+            (o.get("name", "") for o in officials if o.get("role") == "PRINCIPAL_INVESTIGATOR"),
+            officials[0].get("name", "") if officials else "",
+        )
+
+        sites_with_dist: list[tuple[float, dict]] = []
         for loc in contacts_mod.get("locations", []):
             geo = loc.get("geoPoint", {})
             if geo.get("lat") and geo.get("lon"):
                 d = haversine_miles(patient_lat, patient_lon, geo["lat"], geo["lon"])
-                label = (
-                    f"{loc.get('facility', '').strip()} — "
-                    f"{loc.get('city', '')}, "
-                    f"{loc.get('state', loc.get('country', ''))} "
-                    f"({d:.0f} mi)"
-                )
-                sites_with_dist.append((d, label))
+                loc_contacts = loc.get("contacts", [])
+                loc_phone = next((c.get("phone", "") for c in loc_contacts if c.get("phone")), "")
+                loc_email = next((c.get("email", "") for c in loc_contacts if c.get("email")), "")
+                sites_with_dist.append((d, {
+                    "label": (
+                        f"{loc.get('facility', '').strip()} — "
+                        f"{loc.get('city', '')}, "
+                        f"{loc.get('state', loc.get('country', ''))} "
+                        f"({d:.0f} mi)"
+                    ),
+                    "facility": loc.get("facility", "").strip(),
+                    "city": loc.get("city", ""),
+                    "state": loc.get("state", loc.get("country", "")),
+                    "distance_miles": round(d, 1),
+                    "phone": loc_phone or central_phone,
+                    "email": loc_email or central_email,
+                }))
         sites_with_dist.sort(key=lambda x: x[0])
 
         closest_dist = sites_with_dist[0][0] if sites_with_dist else None
@@ -316,12 +364,15 @@ def _flatten_and_rank(studies: list[dict], patient_lat: float, patient_lon: floa
             "title": id_mod.get("briefTitle", ""),
             "phase": ", ".join(design_mod.get("phases", [])) or "N/A",
             "sponsor": sponsor_mod.get("leadSponsor", {}).get("name", ""),
+            "principal_investigator": pi,
+            "contact_phone": central_phone,
+            "contact_email": central_email,
             "summary": desc_mod.get("briefSummary", "")[:500],
             "eligibility": elig_mod.get("eligibilityCriteria", "")[:1000],
             "min_age": elig_mod.get("minimumAge", ""),
             "max_age": elig_mod.get("maximumAge", ""),
             "closest_site_miles": round(closest_dist, 1) if closest_dist is not None else None,
-            "nearest_sites": [label for _, label in sites_with_dist[:5]],
+            "nearest_sites": [info for _, info in sites_with_dist[:5]],
         })
 
     result.sort(key=lambda x: x["closest_site_miles"] if x["closest_site_miles"] is not None else float("inf"))
