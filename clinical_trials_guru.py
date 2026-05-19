@@ -61,8 +61,8 @@ SUBMIT_PROFILE_TOOL: anthropic.types.ToolParam = {
             },
             "phases": {
                 "type": "array",
-                "items": {"type": "string", "enum": ["0", "1", "2", "3", "4"]},
-                "description": "Desired trial phases (0=Early Phase 1, 1=Phase 1, 2=Phase 2, 3=Phase 3, 4=Phase 4). Empty = all phases.",
+                "items": {"type": "string", "enum": ["0", "1", "2", "3", "4", "na"]},
+                "description": "Desired trial phases (0=Early Phase 1, 1=Phase 1, 2=Phase 2, 3=Phase 3, 4=Phase 4, na=Not Applicable). Empty = all phases.",
             },
             "include_eap": {
                 "type": "boolean",
@@ -95,14 +95,19 @@ SEARCH_TRIALS_TOOL: anthropic.types.ToolParam = {
             "phases": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Phase numbers to filter ['1','2','3']. Empty = all. Ignored for EAP.",
+                "description": (
+                    "Phase numbers to filter e.g. ['1','2','3']. "
+                    "IMPORTANT: Never enumerate all phases to mean 'all phases' — "
+                    "pass an empty array [] instead. NA-phase trials (device feasibility, "
+                    "unphased studies) only appear when phases=[] (no filter). "
+                    "Ignored for EAP."
+                ),
             },
             "study_type": {
                 "type": "string",
                 "enum": ["INTERVENTIONAL", "EXPANDED_ACCESS"],
                 "description": "INTERVENTIONAL (default) for clinical trials; EXPANDED_ACCESS for EAP/compassionate use.",
             },
-            "max_results": {"type": "integer", "description": "Max trials to return (default 20)"},
         },
         "required": ["condition", "lat", "lon", "radius_miles"],
     },
@@ -151,6 +156,9 @@ OPTIONAL (ask based on disease):
                           (1,000–3,000 people); required for regulatory approval; best efficacy evidence.
           Phase 4       — Post-approval surveillance; treatment is already FDA-approved;
                           studies long-term safety, rare side effects, and new uses.
+          Not Applicable — Studies that do not fall into the standard phase framework
+                          (e.g., device feasibility studies, behavioral/observational trials,
+                          or studies where phase designation is not required by FDA).
       - Expanded Access Programs (EAP / compassionate use) — a pathway for patients who
         do not qualify for or cannot access a clinical trial to receive an investigational
         drug, biologic, or device outside of a trial. Also called "compassionate use."
@@ -172,10 +180,14 @@ Workflow:
    - If the patient wants clinical trials, search with study_type="INTERVENTIONAL".
    - If the patient wants Expanded Access Programs (EAP), also search with study_type="EXPANDED_ACCESS".
    - If the patient wants both, run separate searches for each study_type.
-2. If fewer than 3 results are found, retry with: a wider radius, a disease synonym,
-   or fewer phase filters.
-3. Produce a final report. Use separate sections for Clinical Trials and Expanded Access if both apply.
-   List the top 5 results per section ranked by site proximity.
+2. IMPORTANT — phase filtering: Never pass phases=["1","2","3","4"] to mean "all phases."
+   Always pass phases=[] (omit the field) when the patient has no phase preference.
+   NA-phase trials (device feasibility studies, unphased interventions) only appear
+   when no phase filter is applied. Passing explicit phase numbers silently excludes them.
+3. If fewer than 3 results are found, retry with: a wider radius, a disease synonym,
+   or drop phase filters entirely (phases=[]).
+4. Produce a final report. Use separate sections for Clinical Trials and Expanded Access if both apply.
+   List the top 10 results per section ranked by site proximity.
    For EACH entry use exactly this format (repeat the block per entry):
 
    📍 **[Closest hospital/facility name]** — [City, State] ([X] mi)
@@ -192,7 +204,7 @@ Workflow:
 
    ---
 
-4. After the results add a short "Next steps" section (bullet points).
+5. After the results add a short "Next steps" section (bullet points).
    For EAP results, note that patients typically need a physician to submit the EAP request.
 
 IMPORTANT: Only report trials returned by the search_clinical_trials tool. Do NOT suggest,
@@ -235,7 +247,13 @@ class PatientProfile:
         )
         lines.append(f"Search radius: {self.radius_miles} miles")
         if self.phases:
-            labels = ["Early Phase 1" if p == "0" else f"Phase {p}" for p in self.phases]
+            def _phase_label(p: str) -> str:
+                if p == "0":
+                    return "Early Phase 1"
+                if p == "na":
+                    return "Not Applicable"
+                return f"Phase {p}"
+            labels = [_phase_label(p) for p in self.phases]
             lines.append(f"Phases: {', '.join(labels)}")
         interests = ["Clinical trials"]
         if self.include_eap:
@@ -279,36 +297,52 @@ def search_trials_api(
     radius_miles: int = 100,
     phases: list[str] | None = None,
     study_type: str = "INTERVENTIONAL",
-    max_results: int = 20,
 ) -> list[dict]:
     is_eap = study_type == "EXPANDED_ACCESS"
     params: dict[str, str | int] = {
         "query.cond": condition,
         "filter.overallStatus": "AVAILABLE" if is_eap else "RECRUITING",
         "filter.geo": f"distance({lat},{lon},{radius_miles}mi)",
-        "pageSize": max_results,
+        "pageSize": 200,  # max page size; we paginate until exhausted
         "format": "json",
     }
     # aggFilters accepts only one value; studyType and phase can't be combined.
     # RECRUITING status already excludes EAPs, so studyType:int is only needed
-    # when no phase filter is applied.
+    # when no phase filter is applied. studyType:int returns all phases including N/A.
     if is_eap:
         params["aggFilters"] = "studyType:exp"
     elif phases:
-        params["aggFilters"] = "phase:" + " ".join(phases)
+        # Exclude "na" from the phase filter — N/A trials have no phase value to match on;
+        # they appear naturally when no phase filter is applied (studyType:int branch).
+        numbered = [p for p in phases if p != "na"]
+        if numbered:
+            params["aggFilters"] = "phase:" + " ".join(numbered)
+        else:
+            params["aggFilters"] = "studyType:int"
     else:
         params["aggFilters"] = "studyType:int"
-    for attempt in range(3):
-        try:
-            resp = httpx.get(CTGOV_BASE, params=params, timeout=30)
-            resp.raise_for_status()
-            return resp.json().get("studies", [])
-        except httpx.HTTPError as exc:
-            if attempt == 2:
-                raise
-            wait = 2 ** attempt
-            console.print(f"[yellow]API warning:[/yellow] {exc} — retrying in {wait}s (attempt {attempt + 1}/3)…")
-            time.sleep(wait)
+
+    all_studies: list[dict] = []
+    while True:
+        for attempt in range(3):
+            try:
+                resp = httpx.get(CTGOV_BASE, params=params, timeout=30)
+                resp.raise_for_status()
+                body = resp.json()
+                break
+            except httpx.HTTPError as exc:
+                if attempt == 2:
+                    raise
+                wait = 2 ** attempt
+                console.print(f"[yellow]API warning:[/yellow] {exc} — retrying in {wait}s (attempt {attempt + 1}/3)…")
+                time.sleep(wait)
+        all_studies.extend(body.get("studies", []))
+        next_token = body.get("nextPageToken")
+        if not next_token:
+            break
+        params["pageToken"] = next_token
+
+    return all_studies
 
 
 def _flatten_and_rank(studies: list[dict], patient_lat: float, patient_lon: float) -> list[dict]:
