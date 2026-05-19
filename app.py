@@ -107,7 +107,6 @@ def _run_research(profile: PatientProfile) -> str:
                     radius_miles=args.get("radius_miles", profile.radius_miles),
                     phases=args.get("phases") or None,
                     study_type=args.get("study_type", "INTERVENTIONAL"),
-                    max_results=args.get("max_results", 20),
                 )
                 ranked = _flatten_and_rank(studies, profile.lat, profile.lon)
                 content = json.dumps(ranked)
